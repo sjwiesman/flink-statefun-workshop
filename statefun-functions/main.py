@@ -28,6 +28,7 @@ from entities_pb2 import QueryMerchantScore, MerchantScore, ExpireMerchantScore
 
 from entities_pb2 import FraudScore, FeatureVector
 from entities_pb2 import Transaction
+from entities_pb2 import CustomThreshold, QueryThreshold
 
 from workshop_util import internal_query_service
 
@@ -38,6 +39,24 @@ functions = StatefulFunctions()
 # The threshold over which we consider fraud
 THRESHOLD = 1
 
+
+@functions.bind("ververica/threshold")
+def threshold_manager(context, message: Union[CustomThreshold, QueryThreshold]):
+    """
+    This function tracks the user defined threshold for a particular account id
+    """
+
+    if isinstance(message, CustomThreshold):
+        context.state("threshold").pack(message)
+    elif isinstance(message, QueryThreshold):
+        threshold = context.state("threshold").unpack(CustomThreshold)
+
+        if not threshold:
+            threshold = CustomThreshold()
+            threshold.account = context.address.identity
+            threshold.threshold = THRESHOLD
+
+        context.pack_and_reply(threshold)
 
 @functions.bind("ververica/counter")
 def fraud_count(context, message: Union[ConfirmFraud, QueryFraud, ExpireFraud]):
@@ -64,6 +83,11 @@ def fraud_count(context, message: Union[ConfirmFraud, QueryFraud, ExpireFraud]):
             count.count += 1
 
         context.state("fraud_count").pack(count)
+        context.pack_and_send_after(
+            timedelta(days=30),
+            context.address.typename(),
+            context.address.identity,
+            ExpireFraud())
 
     elif isinstance(message, QueryFraud):
         count = context.state("fraud_count").unpack(ReportedFraud)
@@ -74,7 +98,13 @@ def fraud_count(context, message: Union[ConfirmFraud, QueryFraud, ExpireFraud]):
         context.pack_and_reply(count)
 
     elif isinstance(message, ExpireFraud):
-        raise ValueError("Expire Fraud has not yet been implemented!")
+        count = context.state("fraud_count").unpack(ReportedFraud)
+        count.count -= 1
+
+        if count.count == 0:
+            del context["fraud_count"]
+        else:
+            context.state("fraud_count").pack(count)
 
 
 @functions.bind("ververica/merchant")
@@ -117,7 +147,7 @@ def score(context, message: FeatureVector):
 
 
 @functions.bind("ververica/transaction-manager")
-def transaction_manager(context, message: Union[Transaction, ReportedFraud, MerchantScore, FraudScore]):
+def transaction_manager(context, message: Union[Transaction, ReportedFraud, MerchantScore, CustomThreshold, FraudScore]):
     """
     The transaction manager coordinates all communication between the various functions.
     This includes building up the feature vector, calling into the model, and reporting
@@ -137,9 +167,16 @@ def transaction_manager(context, message: Union[Transaction, ReportedFraud, Merc
             message.merchant,
             QueryMerchantScore())
 
+        context.pack_and_send(
+            "ververica/threshold",
+            message.account,
+            QueryThreshold())
+
     elif isinstance(message, ReportedFraud):
         m_score = context.state("merchant_score").unpack(MerchantScore)
-        if not m_score:
+        threshold = context.state("threshold").unpack(CustomThreshold)
+
+        if not m_score or not threshold:
             context.state("fraud_count").pack(message)
         else:
             transaction = context.state("transaction").unpack(Transaction)
@@ -156,7 +193,9 @@ def transaction_manager(context, message: Union[Transaction, ReportedFraud, Merc
 
     elif isinstance(message, MerchantScore):
         count = context.state("fraud_count").unpack(ReportedFraud)
-        if not count:
+        threshold = context.state("threshold").unpack(CustomThreshold)
+
+        if not count or not threshold:
             context.state("merchant_score").pack(message)
         else:
             transaction = context.state("transaction").unpack(Transaction)
@@ -171,8 +210,32 @@ def transaction_manager(context, message: Union[Transaction, ReportedFraud, Merc
                 transaction.account,
                 vector)
 
+    elif isinstance(message, CustomThreshold):
+        count = context.state("fraud_count").unpack(ReportedFraud)
+        m_score = context.state("merchant_score").unpack(MerchantScore)
+
+        if not count or not m_score:
+            context.state("threshold").pack(message)
+        else:
+            transaction = context.state("transaction").unpack(Transaction)
+
+            vector = FeatureVector()
+            vector.fraud_count = count.count
+            vector.merchant_score = m_score.score
+            vector.amount = transaction.amount
+
+            context.pack_and_send(
+                "ververica/model",
+                transaction.account,
+                vector)
+
     elif isinstance(message, FraudScore):
-        if message.score > THRESHOLD:
+        threshold = context.state("threshold").unpack(CustomThreshold)
+        if not threshold:
+            threshold = CustomThreshold()
+            threshold.threshold = THRESHOLD
+
+        if message.score > threshold.threshold:
             transaction = context.state("transaction").unpack(Transaction)
             egress_message = kafka_egress_record(topic="alerts", key=transaction.account, value=transaction)
             context.pack_and_send_egress("ververica/kafka-egress", egress_message)
@@ -180,6 +243,7 @@ def transaction_manager(context, message: Union[Transaction, ReportedFraud, Merc
         del context["transaction"]
         del context["fraud_count"]
         del context["merchant_score"]
+        del context["threshold"]
 
 
 #
