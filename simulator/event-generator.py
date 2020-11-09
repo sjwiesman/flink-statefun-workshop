@@ -23,6 +23,8 @@ import threading
 
 import random
 import uuid
+import math
+import os
 
 from kafka.errors import NoBrokersAvailable
 
@@ -31,7 +33,8 @@ from entities_pb2 import Transaction, ConfirmFraud, CustomThreshold
 from kafka import KafkaProducer
 from kafka import KafkaConsumer
 
-KAFKA_BROKER = "kafka-broker:9092"
+KAFKA_BROKER = os.getenv("KAFKA_ADDRESS", "kafka-broker:9092")
+
 PREFIXES = [
     "active", "arc", "auto", "app", "avi", "base", "co", "con", "core", "clear", "en", "echo",
     "even", "ever", "fair", "go", "high", "hyper", "in", "inter", "iso", "jump", "live", "make",
@@ -62,18 +65,25 @@ def random_transaction():
         yield transaction
 
 
+def sleep_time():
+    """Generate a random sleep interval along a sine wave"""
+    seed = 0.0
+    while True:
+        seed += 0.01
+        yield math.fabs(math.sin(seed))
+
+
 def produce():
-    if len(sys.argv) == 2:
-        delay_seconds = int(sys.argv[1])
-    else:
-        delay_seconds = 1
     producer = KafkaProducer(bootstrap_servers=[KAFKA_BROKER])
-    for transaction in random_transaction():
-        key = uuid.uuid4().hex.encode('utf-8')
-        val = transaction.SerializeToString()
-        producer.send(topic='transactions', key=key, value=val)
+    for delay in sleep_time():
+        for _ in range (1, 50):
+            for transaction in random_transaction():
+                key = uuid.uuid4().hex.encode('utf-8')
+                val = transaction.SerializeToString()
+                producer.send(topic='transactions', key=key, value=val)
+
         producer.flush()
-        time.sleep(delay_seconds)
+        time.sleep(delay)
 
 
 def random_confirmed_fraud():

@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: data-simulator
+  namespace: simulator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: statefun
+      component: data-simulator
+  template:
+    metadata:
+      labels:
+        app: statefun
+        component: data-simulator
+    spec:
+      containers:
+        - name: data-simulator
+          image: gcr.io/da-fe-212612/simulator:latest
+          env:
+            - name: KAFKA_ADDRESS
+              value: kafka.kafka-ca1.svc.cluster.local:9092
+          resources:
+            limits:
+              memory: "8Gi"
+            requests:
+              memory: "2Gi"

@@ -19,7 +19,7 @@ if ! [ -x "$(command -v protoc)" ]; then
 fi
 
 protoc \
-    --proto_path=protobuf/ \
+  --proto_path=protobuf/ \
 	--python_out=statefun-functions/ \
 	--python_out=simulator/ \
 	entities.proto

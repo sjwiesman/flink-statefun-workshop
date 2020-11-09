@@ -1,0 +1,27 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: python-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: statefun
+      component: python-worker
+  template:
+    metadata:
+      labels:
+        app: statefun
+        component: python-worker
+    spec:
+      containers:
+        - name: payment-worker
+          image: gcr.io/da-fe-212612/statefun-functions
+          ports:
+            - containerPort: 8000
+              name: endpoint
+          livenessProbe:
+            tcpSocket:
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 60

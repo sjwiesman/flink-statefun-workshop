@@ -1,0 +1,16 @@
+replicas: 3
+topics:
+    - name: transactions
+      partitions: 3
+      replicationFactor: 1
+    - name: alerts
+      partitions: 3
+      replicationFactor: 1
+    - name: confirmed
+      partitions: 3
+      replciationFactor: 1
+    - name: thresholds
+      partitions: 3
+      replicationFactor: 1
+persistence:
+    size: 200Gi

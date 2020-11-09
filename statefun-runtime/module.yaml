@@ -74,7 +74,7 @@ module:
             type: statefun.kafka.io/routable-protobuf-ingress
             id: ververica/transactions
           spec:
-            address: kafka-broker:9092
+            address: kafka.kafka-ca1.svc.cluster.local:9092
             consumerGroupId: transaction-reader
             topics:
               - topic: transactions
@@ -86,7 +86,7 @@ module:
             type: statefun.kafka.io/routable-protobuf-ingress
             id: ververica/confrimed-fraud
           spec:
-            address: kafka-broker:9092
+            address: kafka.kafka-ca1.svc.cluster.local:9092
             consumerGroupId: confirm-fraud-reader
             topics:
               - topic: confirmed
@@ -98,7 +98,7 @@ module:
             type: statefun.kafka.io/routable-protobuf-ingress
             id: ververica/custom-threshold
           spec:
-            address: kafka-broker:9092
+            address: kafka.kafka-ca1.svc.cluster.local:9092
             consumerGroupId: custom-threshold-reader
             topics:
               - topic: thresholds
@@ -111,8 +111,7 @@ module:
             type: statefun.kafka.io/generic-egress
             id: ververica/kafka-egress
           spec:
-            address: kafka-broker:9092
+            address: kafka.kafka-ca1.svc.cluster.local:9092
             deliverySemantic:
-              type: exactly-once
-              transactionTimeoutMillis: 100000
+              type: at-least-once
 

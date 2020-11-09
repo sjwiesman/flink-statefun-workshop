@@ -27,4 +27,3 @@ COPY workshop_util.py /app
 EXPOSE 8000
 
 CMD ["gunicorn", "-b", "0.0.0.0:8000", "-w 4", "main:app"]
-

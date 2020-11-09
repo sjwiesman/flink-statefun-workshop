@@ -58,6 +58,7 @@ def threshold_manager(context, message: Union[CustomThreshold, QueryThreshold]):
 
         context.pack_and_reply(threshold)
 
+
 @functions.bind("ververica/counter")
 def fraud_count(context, message: Union[ConfirmFraud, QueryFraud, ExpireFraud]):
     """
